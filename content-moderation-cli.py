@@ -15,8 +15,7 @@ else:
 
 print(f"--- Configuration ---")
 print(f"Device: {device}")
-print(f"Dtype: {dtype}
-")
+print(f"Dtype: {dtype}\n")
 
 # 1. Loading Instruction Model
 instruct_id = "ibm-granite/granite-3.3-8b-instruct"
@@ -53,17 +52,14 @@ guardian_pipe = pipeline(
 )
 
 def chat():
-    print("
-" + "="*50)
+    print("\n" + "="*50)
     print(" Granite 3.3 CLI + Granite Guardian 3.3 ")
     print(" Type 'exit' or 'quit' to stop. ")
-    print("="*50 + "
-")
+    print("="*50 + "\n")
     
     while True:
         try:
-            user_input = input("
-You: ").strip()
+            user_input = input("\nYou: ").strip()
             if not user_input:
                 continue
             if user_input.lower() in ["exit", "quit"]:
@@ -89,8 +85,7 @@ You: ").strip()
             
             guardian_messages = [
                 {"role": "creator", "content": "harm"},
-                {"role": "user", "content": f"User Message: {user_input}
-Assistant Message: {assistant_response}"}
+                {"role": "user", "content": f"User Message: {user_input}\nAssistant Message: {assistant_response}"}
             ]
             
             # Using Non-Thinking mode (we want the score directly if possible)
@@ -111,26 +106,21 @@ Assistant Message: {assistant_response}"}
 
             # --- STEP 3: DECISION ---
             if "yes" in score:
-                print(f"
-[BLOCKED] La réponse a été jugée nocive par Guardian.")
+                print(f"\n[BLOCKED] La réponse a été jugée nocive par Guardian.")
                 print(f"(Raisonnement: {full_guardian_response})")
             else:
-                print(f"
-Granite: {assistant_response}")
+                print(f"\nGranite: {assistant_response}")
                 # Optional: print thinking if available
                 if "<think>" in full_guardian_response:
                     think = full_guardian_response.split("<think>")[1].split("</think>")[0].strip()
-                    # print(f"
-[Guardian Thought]: {think}")
+                    # print(f"\n[Guardian Thought]: {think}")
 
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"
-Error: {str(e)}")
+            print(f"\nError: {str(e)}")
 
-    print("
-Goodbye!")
+    print("\nGoodbye!")
 
 if __name__ == "__main__":
     chat()

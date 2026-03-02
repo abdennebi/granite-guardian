@@ -12,6 +12,17 @@ import re
 #    return _original_sdpa(*args, **kwargs)
 # F.scaled_dot_product_attention = patched_sdpa
 
+# Fix for GraniteModel.forward signature in some transformers 4.x versions
+import inspect
+from transformers.models.granite.modeling_granite import GraniteModel
+
+original_forward = GraniteModel.forward
+sig = inspect.signature(original_forward)
+if "**kwargs" not in str(sig):
+    def patched_forward(self, *args, **kwargs):
+        return original_forward(self, *args, **kwargs)
+    GraniteModel.forward = patched_forward
+
 app = Flask(__name__)
 
 # Device configuration
