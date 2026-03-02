@@ -1,8 +1,16 @@
 from flask import Flask, render_template, request, jsonify
 import torch
+import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import os, json
 import re
+
+# Monkeypatch scaled_dot_product_attention to ignore 'enable_gqa' if it's not supported
+_original_sdpa = F.scaled_dot_product_attention
+def patched_sdpa(*args, **kwargs):
+    kwargs.pop("enable_gqa", None)
+    return _original_sdpa(*args, **kwargs)
+F.scaled_dot_product_attention = patched_sdpa
 
 app = Flask(__name__)
 
@@ -26,7 +34,7 @@ print(f"Loading shared model: {model_id}...")
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    torch_dtype=dtype,
+    dtype=dtype,
     low_cpu_mem_usage=True
 ).to(device)
 
