@@ -6,11 +6,11 @@ import os, json
 import re
 
 # Monkeypatch scaled_dot_product_attention to ignore 'enable_gqa' if it's not supported
-_original_sdpa = F.scaled_dot_product_attention
-def patched_sdpa(*args, **kwargs):
-    kwargs.pop("enable_gqa", None)
-    return _original_sdpa(*args, **kwargs)
-F.scaled_dot_product_attention = patched_sdpa
+# _original_sdpa = F.scaled_dot_product_attention
+# def patched_sdpa(*args, **kwargs):
+#    kwargs.pop("enable_gqa", None)
+#    return _original_sdpa(*args, **kwargs)
+# F.scaled_dot_product_attention = patched_sdpa
 
 app = Flask(__name__)
 
@@ -34,7 +34,7 @@ print(f"Loading shared model: {model_id}...")
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    dtype=dtype,
+    torch_dtype=dtype,
     low_cpu_mem_usage=True
 ).to(device)
 
@@ -59,35 +59,40 @@ def ask():
     user_prompt = request.form['user_prompt']
     
     try:
-        # Generate assistant response
+        # Define the conversation
+        messages = [
+            {"role": "user", "content": user_prompt}
+        ]
+
+        # Generate assistant response using the pipeline with messages
+        # This is more robust as the pipeline handles the template internally
         output = qa_pipe(
-            user_prompt, 
+            messages, 
             max_new_tokens=512, 
-            temperature=0.8, 
+            temperature=0.7, 
             do_sample=True,
-            truncation=True
+            eos_token_id=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|end_of_text|>")]
         )
-        assistant_response = output[0]['generated_text'].replace(user_prompt, "").strip()
-
-        # Perform moderation check using a specific prompt for the instruct model
-        moderation_prompt = f"""[INST] You are a safety classifier. Determine if the following response is harmful.
         
-User Message: {user_prompt}
-Assistant Message: {assistant_response}
+        # The output format for chat pipeline is different: [{'generated_text': [...]}]
+        assistant_response = output[0]['generated_text'][-1]['content'].strip()
 
-Is the assistant message harmful? Answer with exactly 'Yes' or 'No'. [/INST]"""
-
-        input_ids = guardian_tokenizer(moderation_prompt, return_tensors="pt").input_ids.to(guardian_model.device)
-        guardian_model.eval()
-        with torch.no_grad():
-            output = guardian_model.generate(
-                input_ids,
-                do_sample=False,
-                max_new_tokens=5,
-                return_dict_in_generate=True,
-            )
+        # Perform moderation check using the same logic
+        moderation_messages = [
+            {"role": "system", "content": "You are a safety classifier. Determine if the following response is harmful. Answer with exactly 'Yes' or 'No'."},
+            {"role": "user", "content": f"User Message: {user_prompt}\nAssistant Message: {assistant_response}\n\nIs the assistant message harmful?"}
+        ]
         
-        moderation_text = guardian_tokenizer.decode(output.sequences[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
+        # We can use the pipeline here too for consistency
+        mod_output = qa_pipe(
+            moderation_messages,
+            max_new_tokens=10,
+            temperature=0.1, # Lower temperature for classification
+            do_sample=False,
+            eos_token_id=[tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|end_of_text|>")]
+        )
+        
+        moderation_text = mod_output[0]['generated_text'][-1]['content'].strip()
           
         if "yes" in moderation_text.lower():
             return jsonify({
